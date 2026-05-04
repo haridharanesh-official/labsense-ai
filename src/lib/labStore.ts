@@ -83,7 +83,7 @@ const initialSensors: SensorReading[] = rooms.flatMap((r) => [
   { id: `${r.id}-temp`, roomId: r.id, name: "Temperature", kind: "temperature", value: 24, unit: "°C", status: "normal" },
   { id: `${r.id}-hum`, roomId: r.id, name: "Humidity", kind: "humidity", value: 48, unit: "%", status: "normal" },
   { id: `${r.id}-gas`, roomId: r.id, name: "Gas (MQ2)", kind: "gas", value: 120, unit: "ppm", status: "normal" },
-  { id: `${r.id}-pir`, roomId: r.id, name: "Motion", kind: "motion", value: 0, unit: "", status: "normal" },
+  { id: `${r.id}-pir`, roomId: r.id, name: "Camera Feed", kind: "motion", value: 0, unit: "", status: "normal" },
   { id: `${r.id}-ldr`, roomId: r.id, name: "Ambient Light", kind: "light", value: 420, unit: "lx", status: "normal" },
 ]);
 
