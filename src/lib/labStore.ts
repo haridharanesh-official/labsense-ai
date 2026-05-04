@@ -51,6 +51,14 @@ export interface LogEntry {
   message: string;
 }
 
+export interface CameraEvent {
+  id: string;
+  ts: number;
+  roomId: string;
+  severity: "info" | "warning" | "danger";
+  message: string;
+}
+
 interface LabState {
   rooms: Room[];
   devices: Device[];
@@ -58,6 +66,7 @@ interface LabState {
   automations: Automation[];
   alerts: Alert[];
   logs: LogEntry[];
+  cameraEvents: CameraEvent[];
   toggleDevice: (id: string) => void;
   toggleAutomation: (id: string) => void;
   ackAlert: (id: string) => void;
@@ -123,6 +132,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   automations,
   alerts: initialAlerts,
   logs: initialLogs,
+  cameraEvents: [],
   toggleDevice: (id) =>
     set((state) => {
       const dev = state.devices.find((d) => d.id === id);
@@ -144,6 +154,9 @@ export const useLabStore = create<LabState>((set, get) => ({
     set((state) => ({ alerts: state.alerts.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)) })),
   tick: () =>
     set((state) => {
+      const newEvents: CameraEvent[] = [];
+      const newAlerts: Alert[] = [];
+      const newLogs: LogEntry[] = [];
       const sensors = state.sensors.map((s) => {
         let v = s.value;
         if (s.kind === "temperature") v = +(v + (Math.random() - 0.5) * 0.4).toFixed(1);
@@ -153,9 +166,42 @@ export const useLabStore = create<LabState>((set, get) => ({
         else if (s.kind === "light") v = Math.max(50, Math.round(v + (Math.random() - 0.5) * 40));
         const next = { ...s, value: v };
         next.status = classifySensor(next);
+        // Camera Feed detection: rising edge (was 0 -> now 1)
+        if (s.kind === "motion" && s.value === 0 && v === 1) {
+          const room = state.rooms.find((r) => r.id === s.roomId);
+          const hour = new Date().getHours();
+          const afterHours = hour >= 22 || hour < 6;
+          const severity: CameraEvent["severity"] = afterHours ? "warning" : "info";
+          const message = afterHours
+            ? `Camera Feed: motion detected after-hours in ${room?.code}`
+            : `Camera Feed: motion detected in ${room?.code}`;
+          const ts = Date.now();
+          newEvents.push({ id: uid(), ts, roomId: s.roomId, severity, message });
+          newAlerts.push({
+            id: uid(),
+            ts,
+            roomId: s.roomId,
+            level: severity === "warning" ? "warning" : "info",
+            message,
+            acknowledged: false,
+          });
+          newLogs.push({
+            id: uid(),
+            ts,
+            source: `lab/${s.roomId}/camera`,
+            message: `Motion event (${severity})`,
+          });
+        }
         return next;
       });
-      return { sensors };
+      return {
+        sensors,
+        cameraEvents: newEvents.length
+          ? [...newEvents, ...state.cameraEvents].slice(0, 100)
+          : state.cameraEvents,
+        alerts: newAlerts.length ? [...newAlerts, ...state.alerts].slice(0, 100) : state.alerts,
+        logs: newLogs.length ? [...newLogs, ...state.logs].slice(0, 200) : state.logs,
+      };
     }),
   triggerEmergency: (roomId) =>
     set((state) => {

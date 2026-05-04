@@ -10,6 +10,7 @@ const titles: Record<string, string> = {
   "/devices": "Devices",
   "/automations": "Automations",
   "/alerts": "Alerts",
+  "/camera": "Camera Feed Events",
   "/logs": "Activity Logs",
   "/addons": "Add-ons",
 };
