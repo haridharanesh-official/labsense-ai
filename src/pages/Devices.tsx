@@ -11,7 +11,7 @@ export default function Devices() {
             <p className="text-xs uppercase tracking-widest text-muted-foreground">{room.code}</p>
             <h2 className="text-lg font-bold">{room.name}</h2>
           </header>
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
             {devices.filter((d) => d.roomId === room.id).map((d) => (
               <DeviceCard key={d.id} device={d} />
             ))}
