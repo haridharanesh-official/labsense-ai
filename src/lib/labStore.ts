@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
-export type DeviceKind = "light" | "fan" | "exhaust" | "power" | "buzzer";
-export type SensorKind = "temperature" | "humidity" | "gas" | "motion" | "light";
+export type DeviceKind = "light" | "fan" | "exhaust" | "power" | "buzzer" | "ac";
+export type SensorKind = "temperature" | "humidity" | "gas" | "occupancy" | "light";
 
 export interface Device {
   id: string;
@@ -57,6 +57,7 @@ export interface CameraEvent {
   roomId: string;
   severity: "info" | "warning" | "danger";
   message: string;
+  peopleCount: number;
 }
 
 interface LabState {
@@ -83,6 +84,7 @@ const rooms: Room[] = [
 const initialDevices: Device[] = rooms.flatMap((r) => [
   { id: `${r.id}-light`, roomId: r.id, name: "Ceiling Lights", kind: "light", on: true },
   { id: `${r.id}-fan`, roomId: r.id, name: "Ceiling Fan", kind: "fan", on: false },
+  { id: `${r.id}-ac`, roomId: r.id, name: "Air Conditioner", kind: "ac", on: false },
   { id: `${r.id}-exhaust`, roomId: r.id, name: "Exhaust Fan", kind: "exhaust", on: false },
   { id: `${r.id}-power`, roomId: r.id, name: "Main Power", kind: "power", on: true },
   { id: `${r.id}-buzzer`, roomId: r.id, name: "Emergency Buzzer", kind: "buzzer", on: false },
@@ -92,7 +94,7 @@ const initialSensors: SensorReading[] = rooms.flatMap((r) => [
   { id: `${r.id}-temp`, roomId: r.id, name: "Temperature", kind: "temperature", value: 24, unit: "°C", status: "normal" },
   { id: `${r.id}-hum`, roomId: r.id, name: "Humidity", kind: "humidity", value: 48, unit: "%", status: "normal" },
   { id: `${r.id}-gas`, roomId: r.id, name: "Gas (MQ2)", kind: "gas", value: 120, unit: "ppm", status: "normal" },
-  { id: `${r.id}-pir`, roomId: r.id, name: "Camera Feed", kind: "motion", value: 0, unit: "", status: "normal" },
+  { id: `${r.id}-pir`, roomId: r.id, name: "Camera Feed", kind: "occupancy", value: 0, unit: "people", status: "normal" },
   { id: `${r.id}-ldr`, roomId: r.id, name: "Ambient Light", kind: "light", value: 420, unit: "lx", status: "normal" },
 ]);
 
@@ -100,7 +102,7 @@ const automations: Automation[] = [
   { id: "a1", name: "Gas Leak Emergency", trigger: "Gas > 600 ppm", action: "Exhaust ON · Power OFF · Buzzer ON", enabled: true },
   { id: "a2", name: "Auto Lights at Dusk", trigger: "Ambient < 200 lx", action: "Lights ON", enabled: true },
   { id: "a3", name: "Temperature Cooling", trigger: "Temp > 30 °C", action: "Fan ON", enabled: true },
-  { id: "a4", name: "Motion Auto-Off", trigger: "No motion 10 min", action: "Lights OFF", enabled: false },
+  { id: "a4", name: "Occupancy Auto Control", trigger: "Camera Feed people count change", action: "Lights · Fan · AC · Power follow occupancy", enabled: true },
   { id: "a5", name: "After-Hours Lockdown", trigger: "Time > 22:00", action: "Power OFF · Lights OFF", enabled: true },
 ];
 
@@ -122,6 +124,7 @@ function classifySensor(s: SensorReading): SensorReading["status"] {
   if (s.kind === "gas") return s.value > 600 ? "danger" : s.value > 350 ? "warning" : "normal";
   if (s.kind === "temperature") return s.value > 32 ? "danger" : s.value > 28 ? "warning" : "normal";
   if (s.kind === "humidity") return s.value > 70 ? "warning" : "normal";
+  if (s.kind === "occupancy") return s.value > 8 ? "danger" : s.value > 5 ? "warning" : "normal";
   return "normal";
 }
 
@@ -157,45 +160,73 @@ export const useLabStore = create<LabState>((set, get) => ({
       const newEvents: CameraEvent[] = [];
       const newAlerts: Alert[] = [];
       const newLogs: LogEntry[] = [];
+      let devices = state.devices;
       const sensors = state.sensors.map((s) => {
         let v = s.value;
         if (s.kind === "temperature") v = +(v + (Math.random() - 0.5) * 0.4).toFixed(1);
         else if (s.kind === "humidity") v = +(v + (Math.random() - 0.5) * 1.2).toFixed(0);
         else if (s.kind === "gas") v = Math.max(80, Math.round(v + (Math.random() - 0.5) * 30));
-        else if (s.kind === "motion") v = Math.random() > 0.85 ? 1 : 0;
+        else if (s.kind === "occupancy") {
+          // simulate MQTT camera people count: stay mostly stable, occasionally change ±1
+          if (Math.random() > 0.75) {
+            const delta = Math.random() > 0.5 ? 1 : -1;
+            v = Math.max(0, Math.min(12, s.value + delta));
+          }
+        }
         else if (s.kind === "light") v = Math.max(50, Math.round(v + (Math.random() - 0.5) * 40));
         const next = { ...s, value: v };
         next.status = classifySensor(next);
-        // Camera Feed detection: rising edge (was 0 -> now 1)
-        if (s.kind === "motion" && s.value === 0 && v === 1) {
+        // Camera Feed: occupancy changed → fire event + drive devices
+        if (s.kind === "occupancy" && v !== s.value) {
           const room = state.rooms.find((r) => r.id === s.roomId);
           const hour = new Date().getHours();
           const afterHours = hour >= 22 || hour < 6;
-          const severity: CameraEvent["severity"] = afterHours ? "warning" : "info";
-          const message = afterHours
-            ? `Camera Feed: motion detected after-hours in ${room?.code}`
-            : `Camera Feed: motion detected in ${room?.code}`;
+          const occupied = v > 0;
+          let severity: CameraEvent["severity"] = "info";
+          if (v > 8) severity = "danger";
+          else if (v > 5 || (afterHours && occupied)) severity = "warning";
+
+          const direction = v > s.value ? "entered" : "left";
+          const message = `Camera Feed: ${room?.code} now has ${v} ${v === 1 ? "person" : "people"} (someone ${direction})${afterHours && occupied ? " — after-hours" : ""}`;
           const ts = Date.now();
-          newEvents.push({ id: uid(), ts, roomId: s.roomId, severity, message });
+          newEvents.push({ id: uid(), ts, roomId: s.roomId, severity, message, peopleCount: v });
           newAlerts.push({
             id: uid(),
             ts,
             roomId: s.roomId,
-            level: severity === "warning" ? "warning" : "info",
+            level: severity,
             message,
             acknowledged: false,
           });
           newLogs.push({
             id: uid(),
             ts,
-            source: `lab/${s.roomId}/camera`,
-            message: `Motion event (${severity})`,
+            source: `lab/${s.roomId}/camera/occupancy`,
+            message: `People count: ${v} (${severity})`,
+          });
+
+          // Device control via "MQTT" — turn lights / fan / AC / power on when occupied, off when empty
+          devices = devices.map((d) => {
+            if (d.roomId !== s.roomId) return d;
+            if (d.kind === "light" || d.kind === "fan" || d.kind === "ac" || d.kind === "power") {
+              return { ...d, on: occupied };
+            }
+            return d;
+          });
+          newLogs.push({
+            id: uid(),
+            ts,
+            source: `automation/a4`,
+            message: occupied
+              ? `Occupancy Auto Control: Lights · Fan · AC · Power → ON in ${room?.code}`
+              : `Occupancy Auto Control: Lights · Fan · AC · Power → OFF in ${room?.code} (empty)`,
           });
         }
         return next;
       });
       return {
         sensors,
+        devices,
         cameraEvents: newEvents.length
           ? [...newEvents, ...state.cameraEvents].slice(0, 100)
           : state.cameraEvents,

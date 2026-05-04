@@ -58,7 +58,7 @@ export default function Overview() {
               ))}
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-5">
+            <div className="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
               {roomDevices.map((d) => (
                 <DeviceCard key={d.id} device={d} />
               ))}

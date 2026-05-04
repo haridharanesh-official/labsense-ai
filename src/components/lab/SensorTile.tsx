@@ -1,4 +1,4 @@
-import { Thermometer, Droplets, Wind, Activity, Sun } from "lucide-react";
+import { Thermometer, Droplets, Wind, Users, Sun } from "lucide-react";
 import type { SensorReading } from "@/lib/labStore";
 import { cn } from "@/lib/utils";
 
@@ -6,7 +6,7 @@ const iconMap = {
   temperature: Thermometer,
   humidity: Droplets,
   gas: Wind,
-  motion: Activity,
+  occupancy: Users,
   light: Sun,
 };
 
@@ -20,7 +20,9 @@ export function SensorTile({ sensor }: { sensor: SensorReading }) {
         : "text-success border-success/30 bg-success/10";
 
   const display =
-    sensor.kind === "motion" ? (sensor.value ? "Detected" : "Clear") : `${sensor.value}${sensor.unit ? " " + sensor.unit : ""}`;
+    sensor.kind === "occupancy"
+      ? `${sensor.value} ${sensor.value === 1 ? "person" : "people"}`
+      : `${sensor.value}${sensor.unit ? " " + sensor.unit : ""}`;
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-card p-4 transition hover:border-primary/40 hover:shadow-elegant">

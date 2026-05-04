@@ -1,4 +1,4 @@
-import { Lightbulb, Fan, Wind, Power, Bell } from "lucide-react";
+import { Lightbulb, Fan, Wind, Power, Bell, Snowflake } from "lucide-react";
 import type { Device } from "@/lib/labStore";
 import { useLabStore } from "@/lib/labStore";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,7 @@ const iconMap = {
   exhaust: Wind,
   power: Power,
   buzzer: Bell,
+  ac: Snowflake,
 };
 
 export function DeviceCard({ device }: { device: Device }) {
