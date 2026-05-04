@@ -10,6 +10,7 @@ import Automations from "./pages/Automations";
 import Alerts from "./pages/Alerts";
 import Logs from "./pages/Logs";
 import Addons from "./pages/Addons";
+import CameraEvents from "./pages/CameraEvents";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/devices" element={<Devices />} />
             <Route path="/automations" element={<Automations />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/camera" element={<CameraEvents />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/addons" element={<Addons />} />
           </Route>

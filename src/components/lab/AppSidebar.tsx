@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Cpu, Workflow, AlertTriangle, ScrollText, Puzzle, FlaskConical } from "lucide-react";
+import { LayoutDashboard, Cpu, Workflow, AlertTriangle, ScrollText, Puzzle, FlaskConical, Camera } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,7 @@ const items = [
   { title: "Devices", url: "/devices", icon: Cpu },
   { title: "Automations", url: "/automations", icon: Workflow },
   { title: "Alerts", url: "/alerts", icon: AlertTriangle },
+  { title: "Camera Feed", url: "/camera", icon: Camera },
   { title: "Logs", url: "/logs", icon: ScrollText },
   { title: "Add-ons", url: "/addons", icon: Puzzle },
 ];
